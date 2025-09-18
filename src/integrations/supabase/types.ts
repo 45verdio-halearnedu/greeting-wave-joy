@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_chat_history: {
+        Row: {
+          context_data: Json | null
+          created_at: string | null
+          id: string
+          message: string
+          message_type: string
+          response: string
+          user_id: string
+        }
+        Insert: {
+          context_data?: Json | null
+          created_at?: string | null
+          id?: string
+          message: string
+          message_type: string
+          response: string
+          user_id: string
+        }
+        Update: {
+          context_data?: Json | null
+          created_at?: string | null
+          id?: string
+          message?: string
+          message_type?: string
+          response?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_recommendations: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          description: string
+          expected_impact: number | null
+          expires_at: string | null
+          id: string
+          impact_description: string | null
+          priority: string | null
+          status: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description: string
+          expected_impact?: number | null
+          expires_at?: string | null
+          id?: string
+          impact_description?: string | null
+          priority?: string | null
+          status?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string
+          expected_impact?: number | null
+          expires_at?: string | null
+          id?: string
+          impact_description?: string | null
+          priority?: string | null
+          status?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chama_activities: {
         Row: {
           activity_type: string
@@ -1125,6 +1200,135 @@ export type Database = {
           source?: string | null
           to_currency?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      financial_goals: {
+        Row: {
+          category: string
+          created_at: string | null
+          current_amount: number | null
+          description: string | null
+          id: string
+          priority: string | null
+          status: string | null
+          target_amount: number
+          target_date: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          current_amount?: number | null
+          description?: string | null
+          id?: string
+          priority?: string | null
+          status?: string | null
+          target_amount: number
+          target_date?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          current_amount?: number | null
+          description?: string | null
+          id?: string
+          priority?: string | null
+          status?: string | null
+          target_amount?: number
+          target_date?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      financial_learning_progress: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          module_id: string
+          module_title: string
+          points_earned: number | null
+          progress_percentage: number | null
+          time_spent_minutes: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          module_id: string
+          module_title: string
+          points_earned?: number | null
+          progress_percentage?: number | null
+          time_spent_minutes?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          module_id?: string
+          module_title?: string
+          points_earned?: number | null
+          progress_percentage?: number | null
+          time_spent_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          ai_confidence: number | null
+          amount: number
+          auto_categorized: boolean | null
+          category: string
+          created_at: string | null
+          description: string | null
+          id: string
+          payment_method: string | null
+          subcategory: string | null
+          transaction_date: string
+          transaction_type: string
+          user_id: string
+        }
+        Insert: {
+          ai_confidence?: number | null
+          amount: number
+          auto_categorized?: boolean | null
+          category: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          payment_method?: string | null
+          subcategory?: string | null
+          transaction_date?: string
+          transaction_type: string
+          user_id: string
+        }
+        Update: {
+          ai_confidence?: number | null
+          amount?: number
+          auto_categorized?: boolean | null
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          payment_method?: string | null
+          subcategory?: string | null
+          transaction_date?: string
+          transaction_type?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3274,6 +3478,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_achievements: {
+        Row: {
+          achievement_description: string | null
+          achievement_id: string
+          achievement_title: string
+          icon: string | null
+          id: string
+          points_awarded: number | null
+          unlocked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          achievement_description?: string | null
+          achievement_id: string
+          achievement_title: string
+          icon?: string | null
+          id?: string
+          points_awarded?: number | null
+          unlocked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          achievement_description?: string | null
+          achievement_id?: string
+          achievement_title?: string
+          icon?: string | null
+          id?: string
+          points_awarded?: number | null
+          unlocked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_financial_profiles: {
+        Row: {
+          ai_insights_enabled: boolean | null
+          created_at: string | null
+          current_savings: number | null
+          financial_goals: Json | null
+          id: string
+          monthly_expenses: number | null
+          monthly_income: number | null
+          risk_tolerance: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_insights_enabled?: boolean | null
+          created_at?: string | null
+          current_savings?: number | null
+          financial_goals?: Json | null
+          id?: string
+          monthly_expenses?: number | null
+          monthly_income?: number | null
+          risk_tolerance?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_insights_enabled?: boolean | null
+          created_at?: string | null
+          current_savings?: number | null
+          financial_goals?: Json | null
+          id?: string
+          monthly_expenses?: number | null
+          monthly_income?: number | null
+          risk_tolerance?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_investments: {
         Row: {
