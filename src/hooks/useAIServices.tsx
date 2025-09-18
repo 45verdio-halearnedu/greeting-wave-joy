@@ -53,69 +53,59 @@ export const useAIServices = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Credit Scoring
-  const creditScoreMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch('/api/ai/credit-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-analysis'] });
-    },
-  });
-
-  // Fraud Detection
-  const fraudDetectionMutation = useMutation({
-    mutationFn: async (transactionData: any) => {
-      const response = await fetch('/api/ai/fraud-detection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transactionData),
-      });
-      return response.json();
-    },
-  });
-
-  // AI Chat for Financial Advice
+  // AI Chat for Financial Advice using Supabase Edge Function
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
-      // This would integrate with OpenAI or another AI service
-      const response = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, userId: user?.id }),
+      const response = await supabase.functions.invoke('ai-finance-chat', {
+        body: {
+          message,
+          userId: user?.id,
+          contextData: {
+            timestamp: new Date().toISOString(),
+          }
+        }
       });
-      return response.json();
+
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-chat-history', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['ai-recommendations', user?.id] });
     },
   });
 
-  // Investment Recommendations
-  const investmentRecommendationsMutation = useMutation({
-    mutationFn: async (riskProfile: any) => {
-      const response = await fetch('/api/ai/investment-recommendations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ riskProfile, userId: user?.id }),
+  // Expense Categorization
+  const categorizeExpenseMutation = useMutation({
+    mutationFn: async (transactionData: { description: string; amount: number; merchant?: string }) => {
+      // Use AI to categorize expenses
+      const response = await supabase.functions.invoke('ai-finance-chat', {
+        body: {
+          message: `Categorize this transaction: "${transactionData.description}" for amount KES ${transactionData.amount}. Respond with just the category name (e.g., Food & Bills, Transport, Health, Entertainment, etc.)`,
+          userId: user?.id,
+          contextData: { 
+            type: 'categorization',
+            transaction: transactionData 
+          }
+        }
       });
-      return response.json();
+
+      if (response.error) throw response.error;
+      return response.data;
     },
   });
 
-  // Training Data Collection (storing in profiles for now)
+  // Training Data Collection
   const collectTrainingDataMutation = useMutation({
     mutationFn: async (data: Partial<TrainingData>) => {
-      // Store training data in user profile metadata for now
+      // Store training data in user financial profile
       const { error } = await supabase
-        .from('profiles')
-        .update({
-          ai_training_data: data,
+        .from('user_financial_profiles')
+        .upsert({
+          user_id: user?.id,
+          ai_insights_enabled: true,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', user?.id);
+        });
 
       if (error) throw error;
       return data;
@@ -128,17 +118,47 @@ export const useAIServices = () => {
     },
   });
 
-  // Get AI Analysis (mock data for now)
+  // Get AI Analysis from database
   const aiAnalysisQuery = useQuery({
     queryKey: ['ai-analysis', user?.id],
     queryFn: async () => {
-      // Return mock AI analysis data until backend is ready
+      // Get AI recommendations and insights from database
+      const { data: recommendations } = await supabase
+        .from('ai_recommendations')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('status', 'new')
+        .limit(5);
+
+      const { data: profile } = await supabase
+        .from('user_financial_profiles')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+
+      // Calculate simple credit score based on profile
+      let creditScore = 650; // Base score
+      if (profile?.monthly_income && profile?.monthly_expenses) {
+        const debtToIncome = profile.monthly_expenses / profile.monthly_income;
+        if (debtToIncome < 0.3) creditScore += 100;
+        else if (debtToIncome < 0.5) creditScore += 50;
+      }
+      
+      if (profile?.current_savings && profile.current_savings > 10000) {
+        creditScore += 50;
+      }
+
+      creditScore = Math.min(850, Math.max(300, creditScore));
+
+      const riskLevel = creditScore > 750 ? 'low' : creditScore > 650 ? 'medium' : 'high';
+
       return {
-        creditScore: 750,
-        riskLevel: 'medium' as const,
+        creditScore,
+        riskLevel,
         lastUpdated: new Date().toISOString(),
-        recommendations: [],
+        recommendations: recommendations || [],
         insights: [],
+        fraudAlerts: [],
       };
     },
     enabled: !!user,
@@ -146,20 +166,17 @@ export const useAIServices = () => {
 
   return {
     // Mutations
-    creditScoreMutation,
-    fraudDetectionMutation,
     chatMutation,
-    investmentRecommendationsMutation,
+    categorizeExpenseMutation,
     collectTrainingDataMutation,
     
     // Queries
     aiAnalysisQuery,
     
     // Loading states
-    isAnalyzing: creditScoreMutation.isPending,
-    isDetectingFraud: fraudDetectionMutation.isPending,
     isChatting: chatMutation.isPending,
-    isGeneratingRecommendations: investmentRecommendationsMutation.isPending,
+    isCategorizing: categorizeExpenseMutation.isPending,
     isCollectingData: collectTrainingDataMutation.isPending,
+    isAnalyzing: aiAnalysisQuery.isLoading,
   };
 };

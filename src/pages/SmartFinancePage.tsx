@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,38 +15,138 @@ import {
   Clock, ArrowUp, ArrowDown, Send, Mic, Plus
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
+import { useSmartFinance } from '@/hooks/useSmartFinance';
+import { useAIServices } from '@/hooks/useAIServices';
+import CurrencyDisplay from '@/components/CurrencyDisplay';
 
 const SmartFinancePage = () => {
   const [chatMessage, setChatMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState([
-    { type: 'bot', message: 'Hello! I\'m your AI Finance Advisor. How can I help you manage your money today?' },
-    { type: 'user', message: 'How can I save more with my income of Ksh 10,000?' },
-    { type: 'bot', message: 'Great question! With Ksh 10,000 income, I recommend the 50/30/20 rule: 50% (Ksh 5,000) for needs, 30% (Ksh 3,000) for wants, and 20% (Ksh 2,000) for savings. Start with automatic savings of Ksh 500 weekly. Would you like specific tips for reducing expenses?' }
-  ]);
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalAmount, setNewGoalAmount] = useState('');
+  const [newGoalDate, setNewGoalDate] = useState('');
 
-  // Mock data for visualizations
-  const expenseData = [
-    { month: 'Jan', income: 10000, expenses: 7500, savings: 2500 },
-    { month: 'Feb', income: 10000, expenses: 8000, savings: 2000 },
-    { month: 'Mar', income: 12000, expenses: 8500, savings: 3500 },
-    { month: 'Apr', income: 11000, expenses: 7800, savings: 3200 },
-    { month: 'May', income: 10500, expenses: 7200, savings: 3300 },
-    { month: 'Jun', income: 11500, expenses: 8000, savings: 3500 },
-  ];
+  // Use Smart Finance hooks
+  const {
+    profile,
+    transactions,
+    goals,
+    recommendations,
+    chatHistory,
+    analytics,
+    isLoadingProfile,
+    isLoadingTransactions,
+    updateProfile,
+    addTransaction,
+    saveGoal,
+    sendChat,
+    dismissRecommendation,
+    isSendingChat
+  } = useSmartFinance();
 
-  const expenseCategories = [
-    { name: 'Food & Bills', value: 4500, color: '#8884d8' },
-    { name: 'Transport', value: 1500, color: '#82ca9d' },
-    { name: 'Health', value: 800, color: '#ffc658' },
-    { name: 'Entertainment', value: 700, color: '#ff7300' },
-    { name: 'Other', value: 500, color: '#00ff00' },
-  ];
+  const { aiAnalysisQuery } = useAIServices();
 
-  const financialGoals = [
-    { id: 1, title: 'Emergency Fund', target: 50000, current: 12000, deadline: '2024-12-31', status: 'on-track' },
-    { id: 2, title: 'Buy Motorcycle', target: 150000, current: 45000, deadline: '2025-06-30', status: 'behind' },
-    { id: 3, title: 'Start Business', target: 100000, current: 28000, deadline: '2025-03-31', status: 'on-track' },
-  ];
+  // Convert chat history to the expected format
+  const formattedChatHistory = chatHistory.map(chat => ({
+    type: chat.message_type === 'user' ? 'user' : 'bot',
+    message: chat.message,
+    timestamp: new Date(chat.created_at)
+  }));
+
+  // Generate chart data from transactions
+  const generateChartData = () => {
+    if (!transactions.length) return [];
+
+    const monthlyData = {};
+    const currentDate = new Date();
+    
+    // Initialize last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthKey = date.toISOString().substring(0, 7);
+      monthlyData[monthKey] = {
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        income: 0,
+        expenses: 0,
+        savings: 0
+      };
+    }
+
+    // Process transactions
+    transactions.forEach(transaction => {
+      const monthKey = transaction.transaction_date.substring(0, 7);
+      if (monthlyData[monthKey]) {
+        if (transaction.transaction_type === 'income') {
+          monthlyData[monthKey].income += transaction.amount;
+        } else if (transaction.transaction_type === 'expense') {
+          monthlyData[monthKey].expenses += transaction.amount;
+        }
+      }
+    });
+
+    // Calculate savings for each month
+    Object.keys(monthlyData).forEach(key => {
+      monthlyData[key].savings = monthlyData[key].income - monthlyData[key].expenses;
+    });
+
+    return Object.values(monthlyData);
+  };
+
+  // Generate expense categories from transactions
+  const generateExpenseCategories = () => {
+    if (!transactions.length) return [];
+
+    const categories = {};
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    
+    transactions
+      .filter(t => t.transaction_type === 'expense' && t.transaction_date.startsWith(currentMonth))
+      .forEach(transaction => {
+        if (categories[transaction.category]) {
+          categories[transaction.category] += transaction.amount;
+        } else {
+          categories[transaction.category] = transaction.amount;
+        }
+      });
+
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00', '#ff0000', '#0000ff'];
+    return Object.entries(categories).map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[index % colors.length]
+    }));
+  };
+
+  const handleSendMessage = () => {
+    if (chatMessage.trim() && !isSendingChat) {
+      sendChat(chatMessage);
+      setChatMessage('');
+    }
+  };
+
+  const handleCreateGoal = () => {
+    if (newGoalName && newGoalAmount) {
+      saveGoal({
+        title: newGoalName,
+        target_amount: parseFloat(newGoalAmount),
+        target_date: newGoalDate || undefined,
+        category: 'savings',
+        priority: 'medium',
+        status: 'active',
+        current_amount: 0
+      });
+      setNewGoalName('');
+      setNewGoalAmount('');
+      setNewGoalDate('');
+    }
+  };
+
+  // Default data for charts if no data available
+  const expenseData = generateChartData();
+  const expenseCategories = generateExpenseCategories();
+  
+  // AI Analysis data
+  const aiAnalysis = aiAnalysisQuery.data;
+  const creditScore = aiAnalysis?.creditScore || 650;
 
   const learningModules = [
     { title: 'Budgeting Basics', duration: '10 min', completed: true, points: 100 },
@@ -105,8 +205,10 @@ const SmartFinancePage = () => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-blue-100">This Month</p>
-                    <p className="text-2xl font-bold">Ksh 11,500</p>
+                    <p className="text-blue-100">This Month Income</p>
+                    <p className="text-2xl font-bold">
+                      <CurrencyDisplay amount={analytics.monthlyIncome} showToggle={false} />
+                    </p>
                   </div>
                   <TrendingUp className="h-8 w-8 text-blue-200" />
                 </div>
@@ -118,7 +220,9 @@ const SmartFinancePage = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-green-100">Saved</p>
-                    <p className="text-2xl font-bold">Ksh 3,500</p>
+                    <p className="text-2xl font-bold">
+                      <CurrencyDisplay amount={analytics.monthlySavings} showToggle={false} />
+                    </p>
                   </div>
                   <DollarSign className="h-8 w-8 text-green-200" />
                 </div>
@@ -130,7 +234,7 @@ const SmartFinancePage = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-purple-100">AI Score</p>
-                    <p className="text-2xl font-bold">85/100</p>
+                    <p className="text-2xl font-bold">{Math.round((creditScore / 850) * 100)}/100</p>
                   </div>
                   <Bot className="h-8 w-8 text-purple-200" />
                 </div>
@@ -142,7 +246,7 @@ const SmartFinancePage = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-orange-100">Goals Progress</p>
-                    <p className="text-2xl font-bold">3/5</p>
+                    <p className="text-2xl font-bold">{analytics.activeGoalsCount}/{analytics.activeGoalsCount + analytics.completedGoalsCount}</p>
                   </div>
                   <Target className="h-8 w-8 text-orange-200" />
                 </div>
@@ -190,7 +294,7 @@ const SmartFinancePage = () => {
                 <CardContent>
                   <ScrollArea className="h-96 mb-4 p-4 border rounded-lg">
                     <div className="space-y-4">
-                      {chatHistory.map((msg, index) => (
+                      {formattedChatHistory.map((msg, index) => (
                         <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-sm p-3 rounded-lg ${
                             msg.type === 'user' 
@@ -345,56 +449,59 @@ const SmartFinancePage = () => {
               </Card>
             </div>
 
-            {/* Auto-categorization */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Transactions (Auto-categorized)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { desc: 'MPESA - Grocery Shopping', amount: -850, category: 'Food & Bills', auto: true },
-                    { desc: 'Salary Deposit', amount: 11500, category: 'Income', auto: true },
-                    { desc: 'Matatu Fare', amount: -50, category: 'Transport', auto: true },
-                    { desc: 'Mobile Data Bundle', amount: -200, category: 'Other', auto: false },
-                  ].map((transaction, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium">{transaction.desc}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {transaction.category}
-                          </Badge>
-                          {transaction.auto && (
-                            <Badge variant="outline" className="text-xs">
-                              <Bot className="h-3 w-3 mr-1" />
-                              Auto
+              {/* Recent Transactions (Auto-categorized) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Transactions (Auto-categorized)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {transactions.slice(0, 5).map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-medium">{transaction.description || transaction.category}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {transaction.category}
                             </Badge>
-                          )}
+                            {transaction.auto_categorized && (
+                              <Badge variant="outline" className="text-xs">
+                                <Bot className="h-3 w-3 mr-1" />
+                                Auto
+                              </Badge>
+                            )}
+                          </div>
                         </div>
+                        <span className={`font-bold ${
+                          transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {transaction.transaction_type === 'income' ? '+' : '-'}
+                          <CurrencyDisplay amount={Math.abs(transaction.amount)} showToggle={false} />
+                        </span>
                       </div>
-                      <span className={`font-bold ${
-                        transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {transaction.amount > 0 ? '+' : ''}Ksh {Math.abs(transaction.amount).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+
+                    {transactions.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No transactions yet</p>
+                        <p className="text-sm">Start adding transactions to see insights</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
           </TabsContent>
 
           {/* Goals Tab */}
           <TabsContent value="goals" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {financialGoals.map((goal) => (
+              {goals.map((goal) => (
                 <Card key={goal.id} className="relative overflow-hidden">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span>{goal.title}</span>
-                      <Badge variant={goal.status === 'on-track' ? 'default' : 'destructive'}>
-                        {goal.status === 'on-track' ? 'On Track' : 'Behind'}
+                      <Badge variant={goal.status === 'active' ? 'default' : 'destructive'}>
+                        {goal.status === 'active' ? 'Active' : goal.status}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
@@ -402,18 +509,20 @@ const SmartFinancePage = () => {
                     <div>
                       <div className="flex justify-between text-sm mb-2">
                         <span>Progress</span>
-                        <span>Ksh {goal.current.toLocaleString()} / Ksh {goal.target.toLocaleString()}</span>
+                        <span><CurrencyDisplay amount={goal.current_amount} showToggle={false} /> / <CurrencyDisplay amount={goal.target_amount} showToggle={false} /></span>
                       </div>
-                      <Progress value={(goal.current / goal.target) * 100} className="h-2" />
+                      <Progress value={(goal.current_amount / goal.target_amount) * 100} className="h-2" />
                       <p className="text-xs text-gray-600 mt-1">
-                        {Math.round((goal.current / goal.target) * 100)}% complete
+                        {Math.round((goal.current_amount / goal.target_amount) * 100)}% complete
                       </p>
                     </div>
                     
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Deadline:</span>
-                      <span className="font-medium">{new Date(goal.deadline).toLocaleDateString()}</span>
-                    </div>
+                    {goal.target_date && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Deadline:</span>
+                        <span className="font-medium">{new Date(goal.target_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
                     
                     <Button size="sm" className="w-full">
                       <Plus className="h-4 w-4 mr-2" />
@@ -431,11 +540,25 @@ const SmartFinancePage = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Input placeholder="Goal name (e.g., Buy Land)" />
-                  <Input placeholder="Target amount (Ksh)" type="number" />
-                  <Input placeholder="Deadline" type="date" />
+                  <Input 
+                    placeholder="Goal name (e.g., Buy Land)" 
+                    value={newGoalName}
+                    onChange={(e) => setNewGoalName(e.target.value)}
+                  />
+                  <Input 
+                    placeholder="Target amount (KES)" 
+                    type="number"
+                    value={newGoalAmount}
+                    onChange={(e) => setNewGoalAmount(e.target.value)}
+                  />
+                  <Input 
+                    placeholder="Deadline" 
+                    type="date"
+                    value={newGoalDate}
+                    onChange={(e) => setNewGoalDate(e.target.value)}
+                  />
                 </div>
-                <Button className="mt-4">
+                <Button className="mt-4" onClick={handleCreateGoal}>
                   <Target className="h-4 w-4 mr-2" />
                   Create Goal
                 </Button>
@@ -445,6 +568,39 @@ const SmartFinancePage = () => {
 
           {/* Suggestions Tab */}
           <TabsContent value="suggestions" className="space-y-6">
+            {recommendations.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    AI Recommendations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {recommendations.slice(0, 3).map((rec) => (
+                    <div key={rec.id} className="p-4 border rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-green-700">{rec.title}</h4>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => dismissRecommendation(rec.id)}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                      <p className="text-sm text-gray-600">{rec.description}</p>
+                      {rec.expected_impact && (
+                        <div className="text-sm">
+                          <span className="text-green-600 font-medium">💰 Impact: KES {rec.expected_impact.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Investment Suggestions */}
               <Card>
@@ -493,11 +649,11 @@ const SmartFinancePage = () => {
                       <Button size="sm" className="w-full mt-2">Learn More</Button>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
 
-              {/* Loan Opportunities */}
-              <Card>
+                  {/* Loan Opportunities */}
+                  <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="h-5 w-5" />

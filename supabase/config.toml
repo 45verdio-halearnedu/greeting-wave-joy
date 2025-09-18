@@ -1,4 +1,4 @@
-project_id = "gkretenuuixzcivejwnb"
+project_id = "yrywjbxqlqpdzrudfupm"
 
 [api]
 enabled = true
@@ -24,6 +24,9 @@ file_size_limit = "50MiB"
 
 [edge_functions]
 enabled = true
+
+[functions.ai-finance-chat]
+verify_jwt = true
 
 [functions.chama-wallet-api]
 verify_jwt = true
